@@ -9,6 +9,23 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
+    permissions:
+      id-token: write
+      contents: read
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::680318115068:role/GitHubActions-S3-Deploy-Role
+          aws-region: ap-south-1
+
+      - name: Deploy files to S3
+        run: |
+          aws s3 sync . s3://quizresult1  \
+            --delete \
+            --exclude ".git/*" \
+            --exclude ".github/*"
