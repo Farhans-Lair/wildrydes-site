@@ -1,4 +1,4 @@
-name: Docker CI - Build Image
+name: Docker CI/CD - Build and Push to ECR
 
 on:
   push:
@@ -6,15 +6,34 @@ on:
       - main
 
 jobs:
-  docker-build:
+  build-and-push:
     runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
 
-      - name: Set up Docker
-        uses: docker/setup-buildx-action@v3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::<ACCOUNT_ID>:role/GitHubActions-ECR-Push-Role
+          aws-region: ap-south-1
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build Docker image
-        run: docker build -t wildrydes-site .
+        run: |
+          docker build -t wildrydes-site .
+
+      - name: Tag Docker image
+        run: |
+          docker tag wildrydes-site:latest <ACCOUNT_ID>.dkr.ecr.ap-south-1.amazonaws.com/wildrydes-site:latest
+
+      - name: Push Docker image to ECR
+        run: |
+          docker push <ACCOUNT_ID>.dkr.ecr.ap-south-1.amazonaws.com/wildrydes-site:latest
