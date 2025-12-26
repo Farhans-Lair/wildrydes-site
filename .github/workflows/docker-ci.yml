@@ -20,7 +20,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::<ACCOUNT_ID>:role/GitHubActions-ECR-Push-Role
+          role-to-assume: arn:aws:iam::680318115068:role/GitHubActions-ECR-Push-Role
           aws-region: ap-south-1
 
       - name: Login to Amazon ECR
@@ -32,8 +32,8 @@ jobs:
 
       - name: Tag Docker image
         run: |
-          docker tag wildrydes-site:latest <ACCOUNT_ID>.dkr.ecr.ap-south-1.amazonaws.com/wildrydes-site:latest
+          docker tag wildrydes-site:latest 680318115068.dkr.ecr.ap-south-1.amazonaws.com/wildrydes-site:latest
 
       - name: Push Docker image to ECR
         run: |
-          docker push <ACCOUNT_ID>.dkr.ecr.ap-south-1.amazonaws.com/wildrydes-site:latest
+          docker push 680318115068.dkr.ecr.ap-south-1.amazonaws.com/wildrydes-site:latest
