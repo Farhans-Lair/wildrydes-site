@@ -25,7 +25,7 @@ jobs:
 
       - name: Deploy files to S3
         run: |
-          aws s3 sync . s3://quizresult1\
+          aws s3 sync . s3://mystorebuc\
             --delete \
             --exclude ".git/*" \
             --exclude ".github/*"
