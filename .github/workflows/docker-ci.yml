@@ -1,4 +1,4 @@
-name: Docker CI/CD - Build and Push to ECR
+name: Docker CI/CD - Build, Push to ECR & Deploy to ECS
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-  build-and-push:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     permissions:
@@ -32,24 +32,68 @@ jobs:
 
       - name: Tag Docker image
         run: |
-          docker tag wildrydes-site:latest 680318115068.dkr.ecr.ap-south-1.amazonaws.com/wildrydes-site:latest
+          docker tag wildrydes-site:latest \
+          680318115068.dkr.ecr.ap-south-1.amazonaws.com/wildrydes-site:latest
 
       - name: Push Docker image to ECR
         run: |
-          docker push <ACCOUNT_ID>.dkr.ecr.ap-south-1.amazonaws.com/wildrydes-site:latest
+          docker push \
+          680318115068.dkr.ecr.ap-south-1.amazonaws.com/wildrydes-site:latest
 
+      # ✅ ADD ECS CLUSTER STEP
+      - name: Create ECS cluster if not exists
+        run: |
+          aws ecs describe-clusters \
+            --clusters wildrydes-cluster \
+            --region ap-south-1 \
+            --query "clusters[?status=='ACTIVE'] | length(@)" \
+            --output text | grep -q 1 || \
+          aws ecs create-cluster \
+            --cluster-name wildrydes-cluster \
+            --region ap-south-1
+
+      # ✅ REGISTER TASK DEFINITION
+      - name: Register ECS Task Definition
+        run: |
+          cat <<EOF > task-def.json
+          {
+            "family": "wildrydes-task",
+            "networkMode": "awsvpc",
+            "requiresCompatibilities": ["FARGATE"],
+            "cpu": "256",
+            "memory": "512",
+            "executionRoleArn": "arn:aws:iam::680318115068:role/ecsTaskExecutionRole",
+            "containerDefinitions": [
+              {
+                "name": "wildrydes-container",
+                "image": "680318115068.dkr.ecr.ap-south-1.amazonaws.com/wildrydes-site:latest",
+                "essential": true,
+                "portMappings": [
+                  {
+                    "containerPort": 80,
+                    "protocol": "tcp"
+                  }
+                ]
+              }
+            ]
+          }
+          EOF
+
+          aws ecs register-task-definition \
+            --cli-input-json file://task-def.json \
+            --region ap-south-1
+
+      # ✅ CREATE ECS SERVICE
       - name: Create ECS Service if not exists
         run: |
-          SERVICE_EXISTS=$(aws ecs describe-services \
+          SERVICE_STATUS=$(aws ecs describe-services \
             --cluster wildrydes-cluster \
             --services wildrydes-service \
             --region ap-south-1 \
             --query "services[0].status" \
             --output text 2>/dev/null || echo "MISSING")
 
-          if [ "$SERVICE_EXISTS" = "MISSING" ] || [ "$SERVICE_EXISTS" = "None" ]; then
-            echo "ECS Service does not exist. Creating service..."
-
+          if [ "$SERVICE_STATUS" = "MISSING" ] || [ "$SERVICE_STATUS" = "INACTIVE" ] || [ "$SERVICE_STATUS" = "None" ]; then
             aws ecs create-service \
               --cluster wildrydes-cluster \
               --service-name wildrydes-service \
@@ -59,15 +103,15 @@ jobs:
               --network-configuration "awsvpcConfiguration={subnets=[subnet-xxxx,subnet-yyyy],securityGroups=[sg-xxxx],assignPublicIp=ENABLED}" \
               --region ap-south-1
           else
-            echo "ECS Service already exists. Skipping creation."
+            echo "ECS Service already exists"
           fi
 
-
+      # ✅ DEPLOY (ONLY ONCE)
       - name: Deploy to ECS (force new deployment)
         run: |
           aws ecs update-service \
             --cluster wildrydes-cluster \
             --service wildrydes-service \
+            --task-definition wildrydes-task \
             --force-new-deployment \
             --region ap-south-1
-
